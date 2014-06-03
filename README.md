@@ -1,4 +1,4 @@
-team_sasha_sd_1
+team_sasha_sd
 ===============
 
-Arduino Sketch Repository For Team Sasha for Summer Senior Design 1
+Arduino Sketch Repository For Team Sasha for Summer Senior Design
