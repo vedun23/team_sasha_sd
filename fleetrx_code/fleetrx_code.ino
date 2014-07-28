@@ -7,6 +7,8 @@
 #include <MemoryFree.h>
 
 /***Global Vars****/
+
+//These all print to http req
 String sensor1Id;
 String sensor1Temp;
 String sensor1Light;
@@ -15,6 +17,9 @@ String variable;
 String sensor2Id;
 String sensor2Temp;
 String sensor2Light;
+
+String sensor3id;
+String sensor3gas;
 
 //RX-TX Manchester
 #define BUFFER_SIZE 3
@@ -27,32 +32,34 @@ uint8_t buffer[BUFFER_SIZE];
 uint8_t data[BUFFER_SIZE];
 
 //OBD serial port
-SoftwareSerial obd(2,3);
+SoftwareSerial obd(9,10);
 
 //GPS global vars
-
-String latie;
-String longie;
+int8_t gpsAnswer = 0;
+String latie; //print to http req
+String longie; //print to http req
 
 //for data timeouts, keeps data from becoming stale
 uint8_t stageOneCounter = 0; //rxtx timeout
 uint8_t stageTwoCounter = 0; //gps timeout
 uint8_t stageThreeCounter = 0; //obd2 timeout
 
-uint8_t sensorCache[6]; // stores cached data between sensor reads
+uint8_t sensorCache[8]; // stores cached data between sensor reads
 
 
  //OBD global vars
  //This is a character buffer that will store the data from the serial port
 char rxData[20];
 char rxIndex=0;
-String vehRPM;
-String vehSpeed;
+
+String vehRpm; //print to http req
+String vehSpeed; //print to http req
 
 
 //Global Flags for logic control
 boolean rxFlag1 = false;
 boolean rxFlag2 = false;
+boolean rxFlag3 = false;
 boolean obdFlag = false;
 
 //Logic control flags
@@ -64,12 +71,12 @@ boolean stageThree = true;
 void setup() {
      
    cellStart();
+   
+   //gpsStart();
     
-   rxtxStart();
-    
-  //obdStart();
-  
-  //gpsStart();
+   rxTxStart();
+   
+   //obdStart();
   
   Serial.print(F("Free Memory = "));
   Serial.println(getFreeMemory());
@@ -81,15 +88,23 @@ void loop() {
   
    //receive data from rx/tx 434 Mhz and GPS simultaneously
    //Serial.println(F("Starting Stage One"));
-   stageOne =  rxLoop();
+   if(!stageOne){
+     
+       stageOne =  rxLoop();
+   }
    
    //Serial.println(F("Starting Stage Two"));
+   if(stageOne && !stageTwo)
+   {
+   //Serial.print(F("Starting GPS LOOP"));
+   //Serial.print(F("Free Memory = "));
+   //Serial.println(getFreeMemory());
    //stageTwo = gpsLoop();
-    
+   } 
     if((stageOne && stageTwo) == true)
     {
-       Serial.print(F("Free Memory = "));
-       Serial.println(getFreeMemory());
+       //Serial.print(F("Free Memory = "));
+       //Serial.println(getFreeMemory());
          //Serial.println(F("Starting Stage Three");
          //stageThree = obdLoop();
        
@@ -98,9 +113,13 @@ void loop() {
                      Serial.print(F("Free Memory = "));
                      Serial.println(getFreeMemory());
                     //Send a complete data string to Breeze via 3G
-                    variable = "GET /echo?id=" + sensor1Id + "&tmp=" + sensor1Temp + "&btness=" + sensor1Light + "&id=" + sensor2Id + "&tmp=" + sensor2Temp + "&btness=" + sensor2Light + "\r\n";
+                    variable = "GET /echo?id=" + sensor1Id + "&tmp=" + sensor1Temp + "&btness=" + sensor1Light + "&id=" + sensor2Id + "&tmp=" + sensor2Temp + "&btness=" + sensor2Light + "&id=3" + sensor3id + "&gas=" +sensor3gas + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "\r\n";
                     httpRequest(variable);
+                    //reset control flags
                     stageOne = false;
+                    stageTwo = false;
+                    stageThree = false;
+                    Serial.flush();
                     delay(5000);             
               }
               else
@@ -340,13 +359,11 @@ int8_t sendATcommand2(char* ATcommand, char* expected_answer1,
     return answer;
 }
 
-//The getResponse function collects incoming data from the UART uint8_to the rxData buffer
+//The getResponse function collects incoming data from the UART into the rxData buffer
 // and only exits when a carriage return character is seen. Once the carriage return
 // string is detected, the rxData buffer is null terminated (so we can treat it as a string)
 // and the rxData index is reset to 0 so that the next string can be copied.
-void getResponse(){
- 
-
+void getResponse(void){
   char inChar=0;
   //Keep reading characters until we get a carriage return
   while(inChar != '\r'){
@@ -376,18 +393,19 @@ void getResponse(){
 void gpsStart(){
   
   Serial.println(F("GPS Starting"));
-  
-  uint8_t answer;
-  
+ 
   // starts GPS session in stand alone mode
-   answer = sendATcommand("AT+CGPS=1,1","OK",1000);    
-   if (answer == 0)
+   gpsAnswer = sendATcommand("AT+CGPS=1,1","OK",1000);    
+   if (gpsAnswer == 0)
     {
         Serial.println(F("Error starting the GPS"));
         while(1);
    }
    
    Serial.println(F("GPS Init finished"));
+   //Serial.print(F("Free Memory = "));
+   //Serial.println(getFreeMemory());
+   delay(5000);
   
 }
 
@@ -410,22 +428,23 @@ void cellStart(){
 
 void obdStart(){
   
-     Serial.println(F("OBD Starting"));
-     //Both the Serial LCD and the OBD-II-UART use 9600 bps.
-     obd.begin(9600);
-     
-     //Reset the OBD-II-UART
-     obd.println(F("ATZ"));
-     delay(2000);
-     Serial.println(F("OBD Init Finished"));
+  obd.begin(9600);
+  //Serial.begin(9600);
+  delay(1500);
+  obd.println("ATZ");
+  Serial.println(F("Establishing OBD-II-UART Connection"));
+  delay(2000);
+  obd.flush();
+  Serial.println(F("CONNECTION For OBD-II-UART Established"));
 }
 
-void rxtxStart(){
+void rxTxStart(){
   
   Serial.println(F("RXTX Starting"));
   
-  pinMode(TX_LEDPIN, OUTPUT);  
-  digitalWrite(TX_LEDPIN, 1);
+  pinMode(LED_PIN, OUTPUT); 
+  pinMode(TX_LEDPIN, OUTPUT); 
+  digitalWrite(LED_PIN, 1);
   man.setupReceive(RX_PIN, MAN_1200);
   man.beginReceiveArray(BUFFER_SIZE,buffer); //listen for message from tx's
   
@@ -438,6 +457,7 @@ boolean rxLoop(){
       uint8_t id = 0;
       uint8_t temp;
       uint8_t light;
+      uint8_t gas;
      
       char idstr[5];
       char tempstr[5];
@@ -446,10 +466,13 @@ boolean rxLoop(){
       char idstr2[5];
       char tempstr2[5];
       char lightstr2[5];
+      
+      char idstr3[5];
+      char gasstr[5];
     
-      if(!(rxFlag1 && rxFlag2))
+      if(!(rxFlag1 && rxFlag2 && rxFlag3))
       {
-        Serial.println(F("Rx Searching..."));
+        //Serial.println(F("Rx Searching..."));
         if(man.receiveComplete())//if there is a message received
          {  
             digitalWrite(TX_LEDPIN, 1);  
@@ -468,7 +491,7 @@ boolean rxLoop(){
             //Sensor 1 cache
             if(id == 1)
             {
-              Serial.println(F("Got some sensor 1 data"));
+              Serial.println(F("Got sensor 1 data"));
               sensorCache[0] = id;
               sensorCache[1] = temp;
               sensorCache[2] = light;
@@ -481,13 +504,26 @@ boolean rxLoop(){
             //Sensor 2 cache
             if(id == 2)
             {
-              Serial.println(F("Got some sensor 2 data"));
+              Serial.println(F("Got sensor 2 data"));
               sensorCache[3] = id;
               sensorCache[4] = temp;
               sensorCache[5] = light;
               if((temp != 0) && (light!=0) )
               {
                 rxFlag2 = true;
+              }
+             }
+             //Sensor 3 cache
+            if(id == 3)
+            {
+              Serial.println(F("Got sensor 3 data"));
+              sensorCache[7] = id;
+              sensorCache[8] = temp;
+              //Serial.println(id);
+              //Serial.println(temp);
+              if(gas!=0)
+              {
+                rxFlag3 = true;
               }
              }
    
@@ -498,6 +534,8 @@ boolean rxLoop(){
             itoa(sensorCache[3],idstr2,10);
             itoa(sensorCache[4],tempstr2,10);
             itoa(sensorCache[5],lightstr2,10);
+            itoa(sensorCache[6],idstr3,10);
+            itoa(sensorCache[7],gasstr,10);
             
             String string1(idstr); //stores id
             sensor1Id =string1;//Serial.println(sensor1Id);
@@ -516,16 +554,23 @@ boolean rxLoop(){
             String string6(lightstr2); //stores light sensed data 2
             sensor2Light = string6;
             //Serial.println(sensor2Light); 
-            Serial.println(F("RX FINISHED."));
+            String string7(idstr3); //stores light sensed data 2
+            sensor3id = string7;
+            String string8(gasstr); //stores light sensed data 2
+            sensor3gas = string8;
+            Serial.println(F("RX IS FINISHED."));
             return false;
          }      
       }
       
-      else if(rxFlag1 && rxFlag2)
+      else if(rxFlag1 && rxFlag2 && rxFlag3)
       {
-        Serial.println(F("RX RECEIVE IS TRUE"));   
+         Serial.println(F("ALL RX DATA RECEIVED"));   
          rxFlag1 = false;
          rxFlag2 = false;
+         rxFlag3 = false;
+         //Serial.print(F("Free Memory = "));
+         //Serial.println(getFreeMemory());
          return true;
        }  
 }
@@ -533,86 +578,88 @@ boolean rxLoop(){
 
 
 boolean obdLoop(){
-
-    //Variables to hold the speed and RPM data.
-    int vehicleSpeed=0;
-    int vehicleRPM=0;
-    char vroom[8];
-    char vspeed[8];
   
-    Serial.println(F("OBD Loop Started"));
-
-     //Delete any data that may be in the serial port before we begin.  
+  //Variables to hold the speed and RPM data.
+  int vehicleSpeed=0;
+  int vehicleRPM=0;
+  
+  char speedStr[5];
+  char rpmStr[5];
+  int counter = 0;
+ 
+   do
+   {
+      //Serial.println(F("Flushing the OBD"));
       obd.flush();
-      //Set the cursor in the position where we want the speed data.
-      //Query the OBD-II-UART for the Vehicle Speed
-      obd.println(F("010D"));
+      //Serial.println(F("OBD-II Flushed"));
+      obd.println("010D");
+      Serial.println(F("Getting OBD-II Response"));
       //Get the response from the OBD-II-UART board. We get two responses
       //because the OBD-II-UART echoes the command that is sent.
       //We want the data in the second response.
       getResponse();
       getResponse();
-      //Convert the string data to an uint8_teger
+      //Convert the string data to an integer
       vehicleSpeed = strtol(&rxData[6],0,16);
-      //Pruint8_t the speed data to the lcd
-      //Serial.println(vehicleSpeed);
-      //Serial.pruint8_t(" km/h");
-      delay(100);
-  
-      //Delete any data that may be left over in the serial port.
+      //Print the speed data to the lcd
+      //Serial.print(vehicleSpeed);
+      //Serial.print(" km/h\r\n");
+      delay(100); 
+      //Serial.println(F("Flushing the OBD"));
       obd.flush();
-      //Move the serial cursor to the position where we want the RPM data.
-      //Clear the old RPM data, and then move the cursor position back.
+      //Serial.println(F("OBD-II Flushed"));
+    
+      //Serial.println(F("010C"));
+      obd.println("010C");
       
-      //Query the OBD-II-UART for the Vehicle rpm
-      obd.println(F("010C"));
       //Get the response from the OBD-II-UART board
       getResponse();
       getResponse();
-      //Convert the string data to an uint8_teger
+      //Convert the string data to an integer
       //NOTE: RPM data is two bytes long, and delivered in 1/4 RPM from the OBD-II-UART
       vehicleRPM = ((strtol(&rxData[6],0,16)*256)+strtol(&rxData[9],0,16))/4;
       //Print the rpm data to the lcd
-      //Serial.println(vehicleRPM); 
-  
+      //Serial.print(vehicleRPM); 
+      //Serial.println(" RPM\r\n"); 
+      
       //Give the OBD bus a rest
       delay(100);
-
-      itoa(vehicleRPM,vroom,10);
-      itoa(vehicleSpeed,vspeed,10);
-    
-      String vehRPM(vroom); //stores RPM
-      String vehSpeed(vspeed); //stores the speed
       
-      //if we got non-zero data, set logic flag true
-      if(vroom[0] != 0 && vspeed[0] != 0)
-      {   
-        Serial.println(F("Got good OBD2 data"));
-        obdFlag = true;
-      }
+      //convert vehicle RPM /speed to strings
+      //Convert integers to char array
+      itoa(vehicleSpeed,speedStr,10);
+      itoa(vehicleRPM,rpmStr,10);
       
-      Serial.println(F("OBD Loop end"));
+      String string1(speedStr); //stores id
+      vehSpeed =string1;//Serial.println(sensor1Id);
+      String string2(rpmStr); //stores the temp
+      vehRpm = string2;  
+      counter++;
+  
+   } while((vehicleSpeed == 0 || vehicleRPM == 0) && counter != 5);
+   
+   return true;
 }
 
 boolean gpsLoop(){
   
-  char gps_data[20];
-  uint8_t counter;
-  uint8_t answer;
-  uint8_t N;
-  uint8_t S;
-  uint8_t E;
-  uint8_t W;
+  char gps_data[100];
+  int counter;
+  int N;
+  int S;
+  int E;
+  int W;
   
   //actual array locations for N/S E/W
-  uint8_t gps1;
-  uint8_t gps2;
+  int gps1;
+  int gps2;
   
-        Serial.println(F("GPS loop started"));
-        
-        answer = sendATcommand("AT+CGPSINFO","+CGPSINFO:",1000);    // request info from GPS
-          if (answer == 1)
-          {
+      // Serial.println(F("GPS loop started"));
+       //Serial.print(F("Free Memory = "));
+       //Serial.println(getFreeMemory());        
+        gpsAnswer = sendATcommand3("AT+CGPSINFO","+CGPSINFO:",1000);    // request info from GPS
+          if (gpsAnswer == 1)
+          {   //Serial.println("gpsAnswer is 1");
               counter = 0;
               do{
                   while(Serial.available() == 0);
@@ -625,13 +672,13 @@ boolean gpsLoop(){
               if(gps_data[0] == ',')
               {
                    Serial.println(F("No GPS data currently available"));  
-                   return false;
+                   //return false;
               }
               else
               {         
                 //convert char array to string
                 String gpsData(gps_data);
-                    
+                 Serial.println(gps_data);   
                  N = gpsData.indexOf("N");
                  S = gpsData.indexOf("S");
                  W = gpsData.indexOf("W");
@@ -649,7 +696,7 @@ boolean gpsLoop(){
                  {
                    gps2 = E;
                  }  
-                 if(W != -1)
+                 if(W != -1)                                                                                                                   
                  {
                    gps2 = W;
                  } 
@@ -664,4 +711,42 @@ boolean gpsLoop(){
               Serial.println(F("Error gathering GPS data...no answer.")); 
               return false;
           }
+}
+
+int8_t sendATcommand3(char* ATcommand, char* expected_answer1, unsigned int timeout)
+{
+
+    uint8_t x=0,  answer=0;
+    char response[100];
+    unsigned long previous;
+
+    memset(response, '\0', 100);    // Initialize the string
+
+    delay(100);
+
+    while( Serial.available() > 0) Serial.read();    // Clean the input buffer
+
+    Serial.println(ATcommand);    // Send the AT command 
+
+
+        x = 0;
+    previous = millis();
+
+    // this loop waits for the answer
+    do{
+
+        if(Serial.available() != 0){    
+            response[x] = Serial.read();
+            x++;
+            // check if the desired answer is in the response of the module
+            if (strstr(response, expected_answer1) != NULL)    
+            {
+                answer = 1;
+            }
+        }
+        // Waits for the asnwer with time out
+    }
+    while((answer == 0) && ((millis() - previous) < timeout));    
+
+    return answer;
 }
