@@ -6,6 +6,8 @@
 #include <Arduino.h>
 #include <MemoryFree.h>
 
+String vin = "JM3LW28A230055355";
+
 /***Global Vars****/
 
 //These all print to http req
@@ -21,6 +23,8 @@ String sensor2Light;
 String sensor3id;
 String sensor3gas;
 
+String sensor4motion;
+
 //RX-TX Manchester
 #define BUFFER_SIZE 3
 #define RX_PIN 11
@@ -35,16 +39,16 @@ uint8_t data[BUFFER_SIZE];
 SoftwareSerial obd(9,10);
 
 //GPS global vars
-int8_t gpsAnswer = 0;
-String latie; //print to http req
-String longie; //print to http req
+int gpsAnswer = 0;
+String latie ="3259.59816"; //print to http req
+String longie="09645.15992"; //print to http req
 
 //for data timeouts, keeps data from becoming stale
 uint8_t stageOneCounter = 0; //rxtx timeout
 uint8_t stageTwoCounter = 0; //gps timeout
 uint8_t stageThreeCounter = 0; //obd2 timeout
 
-uint8_t sensorCache[8]; // stores cached data between sensor reads
+uint8_t sensorCache[9]; // stores cached data between sensor reads
 
 
  //OBD global vars
@@ -59,13 +63,11 @@ String vehSpeed; //print to http req
 //Global Flags for logic control
 boolean rxFlag1 = false;
 boolean rxFlag2 = false;
-boolean rxFlag3 = false;
-boolean obdFlag = false;
+//boolean rxFlag3 = false;
 
-//Logic control flags
 boolean stageOne = false;
 boolean stageTwo = true;
-boolean stageThree = true;
+boolean stageThree = false;
 
 /****Setup Code ****/
 void setup() {
@@ -76,7 +78,7 @@ void setup() {
     
    rxTxStart();
    
-   //obdStart();
+   obdStart();
   
   Serial.print(F("Free Memory = "));
   Serial.println(getFreeMemory());
@@ -99,25 +101,26 @@ void loop() {
    //Serial.print(F("Starting GPS LOOP"));
    //Serial.print(F("Free Memory = "));
    //Serial.println(getFreeMemory());
-   //stageTwo = gpsLoop();
+  // stageTwo = gpsLoop();
    } 
     if((stageOne && stageTwo) == true)
     {
        //Serial.print(F("Free Memory = "));
        //Serial.println(getFreeMemory());
          //Serial.println(F("Starting Stage Three");
-         //stageThree = obdLoop();
+         stageThree = obdLoop();
        
               if(stageThree == true)
               {
                      Serial.print(F("Free Memory = "));
                      Serial.println(getFreeMemory());
                     //Send a complete data string to Breeze via 3G
-                    variable = "GET /echo?id=" + sensor1Id + "&tmp=" + sensor1Temp + "&btness=" + sensor1Light + "&id=" + sensor2Id + "&tmp=" + sensor2Temp + "&btness=" + sensor2Light + "&id=3" + sensor3id + "&gas=" +sensor3gas + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "\r\n";
+                    variable = "GET /test.php?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "\r\n";
+                    //variable = "GET /test.php?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "\r\n";
                     httpRequest(variable);
                     //reset control flags
                     stageOne = false;
-                    stageTwo = false;
+                    //stageTwo = false;
                     stageThree = false;
                     Serial.flush();
                     delay(5000);             
@@ -137,8 +140,8 @@ void loop() {
 void httpRequest(String request) {
   int aux;
   int data_size = 0;
-  char url[ ]="108.244.165.72";
-  int port= 5004;// or 5004, 5005
+  char url[ ]="54.191.54.53";
+  int port= 80;// or 5004, 5005
 
   char aux_str[50];
   char data[512];
@@ -247,9 +250,9 @@ int readChars(char *buffer, int length, int timeout){
 
 void power_on(){
   
-    uint8_t onModulePin = 2;
+    int onModulePin = 2;
     pinMode(onModulePin, OUTPUT);
-    uint8_t answer=0;
+    int answer=0;
 
     // checks if the module is started
     answer = sendATcommand("AT", "OK", 2000);
@@ -457,7 +460,6 @@ boolean rxLoop(){
       uint8_t id = 0;
       uint8_t temp;
       uint8_t light;
-      uint8_t gas;
      
       char idstr[5];
       char tempstr[5];
@@ -469,8 +471,11 @@ boolean rxLoop(){
       
       char idstr3[5];
       char gasstr[5];
+      
+      char motstr[5];
     
-      if(!(rxFlag1 && rxFlag2 && rxFlag3))
+      //if(!(rxFlag1 && rxFlag2 && rxFlag3))
+      if(!(rxFlag1 && rxFlag2))
       {
         //Serial.println(F("Rx Searching..."));
         if(man.receiveComplete())//if there is a message received
@@ -514,18 +519,28 @@ boolean rxLoop(){
               }
              }
              //Sensor 3 cache
-            if(id == 3)
+           /* if(id == 3)
             {
               Serial.println(F("Got sensor 3 data"));
-              sensorCache[7] = id;
-              sensorCache[8] = temp;
+              sensorCache[6] = id;
+              sensorCache[7] = temp;
               //Serial.println(id);
               //Serial.println(temp);
-              if(gas!=0)
+              if(temp!=0)
               {
                 rxFlag3 = true;
               }
-             }
+             }*/
+            /* //Sensor 4 cache
+            if(id == 4)
+            {
+              Serial.println(F("Got sensor 4 data"));
+              sensorCache[8] = id;
+              sensorCache[9] = temp;
+              //Serial.println(id);
+              //Serial.println(temp);
+                rxFlag4 = true;
+             }*/
    
             //Convert integers to char array
             itoa(sensorCache[0],idstr,10);
@@ -536,6 +551,7 @@ boolean rxLoop(){
             itoa(sensorCache[5],lightstr2,10);
             itoa(sensorCache[6],idstr3,10);
             itoa(sensorCache[7],gasstr,10);
+            itoa(sensorCache[9],motstr,10);
             
             String string1(idstr); //stores id
             sensor1Id =string1;//Serial.println(sensor1Id);
@@ -558,17 +574,21 @@ boolean rxLoop(){
             sensor3id = string7;
             String string8(gasstr); //stores light sensed data 2
             sensor3gas = string8;
+           // String string9(motstr); //stores light sensed data 2
+          //  sensor4motion = string9;
             Serial.println(F("RX IS FINISHED."));
             return false;
          }      
       }
       
-      else if(rxFlag1 && rxFlag2 && rxFlag3)
+      //else if(rxFlag1 && rxFlag2 && rxFlag3)
+      else if(rxFlag1 && rxFlag2)
       {
          Serial.println(F("ALL RX DATA RECEIVED"));   
          rxFlag1 = false;
          rxFlag2 = false;
-         rxFlag3 = false;
+         //rxFlag3 = false;
+        // rxFlag4 = false;
          //Serial.print(F("Free Memory = "));
          //Serial.println(getFreeMemory());
          return true;
@@ -743,7 +763,7 @@ int8_t sendATcommand3(char* ATcommand, char* expected_answer1, unsigned int time
             {
                 answer = 1;
             }
-        }
+        }                                                                                                                                                                                                                                                                                                                                
         // Waits for the asnwer with time out
     }
     while((answer == 0) && ((millis() - previous) < timeout));    
