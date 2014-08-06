@@ -48,11 +48,7 @@ int gpsAnswer = 0;
 String latie; //print to http req
 String longie; //print to http req
 
-if(!gpsON){
-	//TODO declare float array here for these to cycle through on a route
-	latie ="3259.59816"; 
-	longie="09645.15992";
-}
+
 
 //for data timeouts, keeps data from becoming stale
 uint8_t stageOneCounter = 0; //rxtx timeout
@@ -70,11 +66,6 @@ char rxIndex=0;
 String vehRpm; //print to http req
 String vehSpeed; //print to http req
 
-if(!obdON){
-	vehRpm = 1000; //defaults if obd is off
-	vehSpeed = 60; //defaults if obd is off
-}
-
 
 //Global Flags for logic control
 boolean rxFlag1 = false;
@@ -86,22 +77,39 @@ boolean stageOne = false; //RXTX always runs
 boolean stageTwo = false;
 boolean stageThree = false;
 
-//set control flags if we are not running gps or obd modules
-if(!obdON){
-	stageThree = true;
-}
 
-if(!gpsON){
-	stageTwo = true;
-}
 
 
 
 /****Setup Code ****/
 void setup() {
+  
+  //Control logic for flags
+  
+      if(!obdON){
+    	vehRpm = "1000"; //defaults if obd is off
+    	vehSpeed = "60"; //defaults if obd is off
+    }
+    
+      if(!gpsON)
+    {
+    	//TODO declare float array here for these to cycle through on a route
+    	latie ="3259.59816"; 
+    	longie="09645.15992";
+    }
 
-   servo1.attach(5);  // attaches the servo on pin 9 to the servo object 
+    //set control flags if we are not running gps or obd modules
+    if(!obdON){
+    	stageThree = true;
+    }
+    
+    if(!gpsON){
+    	stageTwo = true;
+    }
      
+   //Startup Sequence
+   servo1.attach(5);  // attaches the servo on pin 5 to the servo object
+   
    cellStart();
    Serial.flush();
    
@@ -118,6 +126,7 @@ void setup() {
 	   Serial.flush();
    }
   
+  //print current SRAM status
    Serial.print(F("Free Memory = "));
    Serial.println(getFreeMemory());
   
@@ -241,11 +250,11 @@ void httpRequest(String request) {
                Serial.print(F("Returned: "));
                Serial.print(returned);
                Serial.print(F(" : "));
-               
-			   if(data.indexOf('ALARM') != -1)
+               String dataset(data);
+			   if(dataset.indexOf('ALARM') != -1)
 			   {
-						Serial.println(F("ALARM RECIEVED"));
-						//turn servo on alarm
+                               Serial.println(F("ALARM RECIEVED"));
+                                //turn servo on alarm
 						for(pos = 0; pos < 180; pos += 1)  // goes from 0 degrees to 180 degrees 
 						{                                  // in steps of 1 degree 
 							servo1.write(pos);              // tell servo to go to position in variable 'pos' 
@@ -259,7 +268,7 @@ void httpRequest(String request) {
 						}  	
 			   }
 			   else{
-						Serial.println(data);
+			           Serial.println(data);
 			   }
             }
          }
@@ -570,8 +579,8 @@ boolean rxLoop(){
       char tempStr[5];
       char lightStr[5];
       
-      char tempstr2[5];
-      char lightstr2[5];
+      char tempStr2[5];
+      char lightStr2[5];
 
       char gasStr[5];
     
