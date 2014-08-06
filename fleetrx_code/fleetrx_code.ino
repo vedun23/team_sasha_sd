@@ -9,21 +9,21 @@
 String vin = "JM3LW28A230055355";
 
 /***Global Vars****/
+//Demo control options
+boolean obdON = true;
+boolean gpsON = true;
 
 //These all print to http req
-String sensor1Id;
+
+String variable; // holds the request with all variable data
+
 String sensor1Temp;
 String sensor1Light;
-String variable;
 
-String sensor2Id;
 String sensor2Temp;
 String sensor2Light;
 
-String sensor3id;
 String sensor3gas;
-
-String sensor4motion;
 
 //RX-TX Manchester
 #define BUFFER_SIZE 3
@@ -42,24 +42,33 @@ SoftwareSerial obd(9,10);
 int gpsAnswer = 0;
 String latie; //print to http req
 String longie; //print to http req
-//String latie ="3259.59816"; //print to http req
-//String longie="09645.15992"; //print to http req
+
+if(!gpsON){
+	//TODO declare float array here for these to cycle through on a route
+	latie ="3259.59816"; 
+	longie="09645.15992";
+}
 
 //for data timeouts, keeps data from becoming stale
 uint8_t stageOneCounter = 0; //rxtx timeout
 uint8_t stageTwoCounter = 0; //gps timeout
 uint8_t stageThreeCounter = 0; //obd2 timeout
 
-uint8_t sensorCache[9]; // stores cached data between sensor reads
+uint8_t sensorCache[4]; // stores cached data between sensor reads
 
 
- //OBD global vars
- //This is a character buffer that will store the data from the serial port
+//OBD global vars
+//This is a character buffer that will store the data from the serial port
 char rxData[20];
 char rxIndex=0;
 
 String vehRpm; //print to http req
 String vehSpeed; //print to http req
+
+if(!obdON){
+	vehRpm = 1000; //defaults if obd is off
+	vehSpeed = 60; //defaults if obd is off
+}
 
 
 //Global Flags for logic control
@@ -67,31 +76,43 @@ boolean rxFlag1 = false;
 boolean rxFlag2 = false;
 boolean rxFlag3 = false;
 
-boolean stageOne = false;
+//Initialize control flags
+boolean stageOne = false; //RXTX always runs
 boolean stageTwo = false;
 boolean stageThree = false;
+
+//set control flags if we are not running gps or obd modules
+if(!obdON){
+	stageThree = true;
+}
+
+if(!gpsON){
+	stageTwo = true;
+}
+
+
 
 /****Setup Code ****/
 void setup() {
      
    cellStart();
-   
    Serial.flush();
    
-  gpsStart();
-   
-   Serial.flush();
+   if(gpsON){
+      gpsStart();
+	  Serial.flush();
+   }
     
    rxTxStart();
-   
    Serial.flush();
    
-   obdStart();
-   
-   Serial.flush();
+   if(obdON){
+	   obdStart();
+	   Serial.flush();
+   }
   
-  Serial.print(F("Free Memory = "));
-  Serial.println(getFreeMemory());
+   Serial.print(F("Free Memory = "));
+   Serial.println(getFreeMemory());
   
    Serial.flush();
   
@@ -110,29 +131,38 @@ void loop() {
    
    if(stageOne && !stageTwo)
    {
-  
-    stageTwo = gpsLoop();
-    Serial.flush();
+     if(gpsON){	 
+		stageTwo = gpsLoop();
+		Serial.flush();
+	}
    } 
    
     if((stageOne && stageTwo) == true)
     {
-         stageThree = obdLoop();
-         Serial.flush();
-       
+		if(obdON){
+			 stageThree = obdLoop();
+			 Serial.flush();
+		 }    
               if(stageThree == true)
               {
                      Serial.print(F("Free Memory = "));
                      Serial.println(getFreeMemory());
                     //Send a complete data string to Breeze via 3G
                     variable = "GET /echo?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "&co=" + sensor3gas + "\r\n";
-                    //variable = "GET /echo?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&co=" + sensor3gas + "\r\n";
-
+					
+					//send data to cloud
                     httpRequest(variable);
+					
                     //reset control flags
                     stageOne = false;
-                    stageTwo = false;
-                    stageThree = false;
+					if(gpsON){
+						stageTwo = false;
+					}
+					
+					if(obdON){
+						stageThree = false;
+					}
+					
                     Serial.flush();
                     delay(5000);             
               }
@@ -149,8 +179,6 @@ void loop() {
 void httpRequest(String request) {
   int aux;
   int data_size = 0;
-  //char url[ ]="54.191.54.53";
-  //int port= 80;// or 5004, 5005
   char url[ ]="108.244.165.72";
   int port= 5004;// or 5004, 5005
   
@@ -226,7 +254,7 @@ void httpRequest(String request) {
 
 }
 
-//COMMENT OUT SERIAL CHARS
+//COMMENT OUT SERIAL PRINTS
 int readChars(char *buffer, int length, int timeout){
     int x = 0;
     long lTimeout = timeout;
@@ -509,22 +537,17 @@ void rxTxStart(){
 boolean rxLoop(){
  
       //RX/TX vars
-      uint8_t id = 0;
-      uint8_t temp;
-      uint8_t light;
+      uint8_t id; // id of the sensor
+      uint8_t data1; //first data point
+      uint8_t data2; //second data point
      
-      char idstr[5];
-      char tempstr[5];
-      char lightstr[5];
+      char tempStr[5];
+      char lightStr[5];
       
-      char idstr2[5];
       char tempstr2[5];
       char lightstr2[5];
-      
-      char idstr3[5];
-      char gasstr[5];
-      
-      char motstr[5];
+
+      char gasStr[5];
     
       if(!(rxFlag1 && rxFlag2 && rxFlag3))
       {
@@ -536,120 +559,100 @@ boolean rxLoop(){
             //holds received id
             id = buffer[0];
             //holds received temp
-            temp  = buffer[1];
+            data1  = buffer[1];
             //holds received light data
-            light = buffer[2];
+            data2 = buffer[2];
+			
             man.beginReceiveArray(BUFFER_SIZE,buffer);
             digitalWrite(TX_LEDPIN,0);
             delay(5000);
             
-            //Store data in separate sensor caches
-            //Sensor 1 cache
+            //Store different data in separate sensor caches
+			
+            //Sensor 1 cache (Temp/Light data)
             if(id == 1)
             {
               Serial.println(F("Got sensor 1 data"));
-                Serial.flush();
-              sensorCache[0] = id;
-              sensorCache[1] = temp;
-              sensorCache[2] = light;
-              if((temp != 0) && (light!=0) )
+              Serial.flush();
+			  
+              sensorCache[0] = data1;
+              sensorCache[1] = data2;
+			  
+              if((data1 != 0) && (data2!=0) )
               {
                 rxFlag1 = true;
               }
               
             }
-            //Sensor 2 cache
+            //Sensor 2 cache (Temp/Light data)
             if(id == 2)
             {
               Serial.println(F("Got sensor 2 data"));
-                Serial.flush();
-              sensorCache[3] = id;
-              sensorCache[4] = temp;
-              sensorCache[5] = light;
-              if((temp != 0) && (light!=0) )
+              Serial.flush();
+			  
+              sensorCache[2] = data1;
+              sensorCache[3] = data2;
+			  
+              if((data1 != 0) && (data2!=0) )
               {
                 rxFlag2 = true;
               }
+			  
              }
-             //Sensor 3 cache
+             //Sensor 3 cache (O2 Gas Sensor)
             if(id == 3)
             {
               Serial.println(F("Got sensor 3 data"));
-              sensorCache[6] = id;
-              sensorCache[7] = temp;
-              //Serial.println(id);
-              //Serial.println(temp);
-              if(temp!=0)
+			  Serial.flush();
+			  
+              sensorCache[4] = data1;
+
+              if(data1!=0)
               {
                 rxFlag3 = true;
               }
              }
-            /* //Sensor 4 cache
-            if(id == 4)
-            {
-              Serial.println(F("Got sensor 4 data"));
-              sensorCache[8] = id;
-              sensorCache[9] = temp;
-              //Serial.println(id);
-              //Serial.println(temp);
-                rxFlag4 = true;
-             }*/
    
             //Convert integers to char array
-            itoa(sensorCache[0],idstr,10);
-            itoa(sensorCache[1],tempstr,10);
-            itoa(sensorCache[2],lightstr,10);
-            itoa(sensorCache[3],idstr2,10);
-            itoa(sensorCache[4],tempstr2,10);
-            itoa(sensorCache[5],lightstr2,10);
-            itoa(sensorCache[6],idstr3,10);
-            itoa(sensorCache[7],gasstr,10);
-            itoa(sensorCache[9],motstr,10);
+            itoa(sensorCache[0],tempStr,10);
+            itoa(sensorCache[1],lightStr,10);
+            itoa(sensorCache[2],tempStr2,10);
+            itoa(sensorCache[3],lightStr2,10);
+            itoa(sensorCache[4],gasStr,10);
             
-            String string1(idstr); //stores id
-            sensor1Id =string1;//Serial.println(sensor1Id);
-            String string2(tempstr); //stores the temp
-            //Serial.println(sensor1Temp);
-            sensor1Temp = string2;
-            sensor1Temp[2] = '\0';
-            //Serial.println(sensor1Temp);
-            String string3(lightstr); //stores the light sensed data
-            sensor1Light = string3;
-            //Serial.println(sensor1Light);
-            String string4(idstr2); //stores id 2
-            sensor2Id = string4;
-            //Serial.println(sensor2Id);
-            String string5(tempstr2); //stores temp 2
-            
-            sensor2Temp = string5;
+			
+            String string1(tempStr); //stores the temp
+            sensor1Temp = string1;
+            sensor1Temp[2] = '\0'; 
+			
+            String string2(lightStr); //stores the light sensed data
+            sensor1Light = string2;
+						
+            String string3(tempStr2); //stores temp 2
+            sensor2Temp = string3;
             sensor2Temp[2] = '\0';
-            //Serial.println(sensor2Temp);
-            String string6(lightstr2); //stores light sensed data 2
-            sensor2Light = string6;
-            //Serial.println(sensor2Light); 
-            String string7(idstr3); //stores light sensed data 2
-            sensor3id = string7;
-            String string8(gasstr); //stores light sensed data 2
-            sensor3gas = string8;
-           // String string9(motstr); //stores light sensed data 2
-          //  sensor4motion = string9;
+			
+            String string4(lightStr2); //stores light sensed data 2
+            sensor2Light = string4;
+			
+            String string5(gasStr); //stores light sensed data 2
+            sensor3gas = string5;
+
             Serial.println(F("RX IS FINISHED."));
-              Serial.flush();
+            Serial.flush();
             return false;
          }      
       }
       
-      //else if(rxFlag1 && rxFlag2 && rxFlag3)
       else if(rxFlag1 && rxFlag2 && rxFlag3)
       {
          Serial.println(F("ALL RX DATA RECEIVED"));   
          Serial.flush();
+		 
          rxFlag1 = false;
          rxFlag2 = false;
          rxFlag3 = false;
-        // rxFlag4 = false;
-         //Serial.print(F("Free Memory = "));
-         //Serial.println(getFreeMemory());
+		 
          return true;
        }  
 }
@@ -732,13 +735,10 @@ boolean gpsLoop(){
   //actual array locations for N/S E/W
   int gps1;
   int gps2;
-  
-      // Serial.println(F("GPS loop started"));
-       //Serial.print(F("Free Memory = "));
-       //Serial.println(getFreeMemory());        
+     
         gpsAnswer = sendATcommand3("AT+CGPSINFO","+CGPSINFO:",1000);    // request info from GPS
           if (gpsAnswer == 1)
-          {   //Serial.println("gpsAnswer is 1");
+          {  
               counter = 0;
               do{
                   while(Serial.available() == 0);
@@ -750,15 +750,14 @@ boolean gpsLoop(){
               
               if(gps_data[0] == ',')
               {
-                   Serial.println(F("No GPS data currently available"));  
+                     Serial.println(F("No GPS data currently available"));  
                      Serial.flush();
-                   //return false;
               }
               else
               {         
                 //convert char array to string
-                String gpsData(gps_data);
-                 Serial.println(gps_data);   
+                 String gpsData(gps_data);
+                 //Serial.println(gps_data);   
                  N = gpsData.indexOf("N");
                  S = gpsData.indexOf("S");
                  W = gpsData.indexOf("W");
@@ -788,9 +787,9 @@ boolean gpsLoop(){
           }
           else
           {
-              Serial.println(F("Error gathering GPS data...no answer."));
+               Serial.println(F("Error gathering GPS data...no answer."));
                Serial.flush(); 
-              return false;
+               return false;
           }
 }
 
