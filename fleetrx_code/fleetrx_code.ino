@@ -100,7 +100,7 @@ if(!gpsON){
 /****Setup Code ****/
 void setup() {
 
-   myservo.attach(5);  // attaches the servo on pin 9 to the servo object 
+   servo1.attach(5);  // attaches the servo on pin 9 to the servo object 
      
    cellStart();
    Serial.flush();
