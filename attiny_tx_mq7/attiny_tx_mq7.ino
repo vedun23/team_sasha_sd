@@ -25,7 +25,7 @@ long previousMillis = 0;        // will store last time LED was updated
 
 // the follow variables is a long because the time, measured in miliseconds,
 // will quickly become a bigger number than can be stored in an int.
-long interval = 19000;           // interval at which to exe (milliseconds)
+long interval = 11000;           // interval at which to exe (milliseconds)
 
 #define TX_PIN 1  //pin where your transmitter is connected
 #define LED_PIN 0 //pin for blinking LED

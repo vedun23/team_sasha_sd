@@ -40,8 +40,10 @@ SoftwareSerial obd(9,10);
 
 //GPS global vars
 int gpsAnswer = 0;
-String latie ="3259.59816"; //print to http req
-String longie="09645.15992"; //print to http req
+String latie; //print to http req
+String longie; //print to http req
+//String latie ="3259.59816"; //print to http req
+//String longie="09645.15992"; //print to http req
 
 //for data timeouts, keeps data from becoming stale
 uint8_t stageOneCounter = 0; //rxtx timeout
@@ -63,10 +65,10 @@ String vehSpeed; //print to http req
 //Global Flags for logic control
 boolean rxFlag1 = false;
 boolean rxFlag2 = false;
-//boolean rxFlag3 = false;
+boolean rxFlag3 = false;
 
 boolean stageOne = false;
-boolean stageTwo = true;
+boolean stageTwo = false;
 boolean stageThree = false;
 
 /****Setup Code ****/
@@ -74,14 +76,24 @@ void setup() {
      
    cellStart();
    
-   //gpsStart();
+   Serial.flush();
+   
+  gpsStart();
+   
+   Serial.flush();
     
    rxTxStart();
    
+   Serial.flush();
+   
    obdStart();
+   
+   Serial.flush();
   
   Serial.print(F("Free Memory = "));
   Serial.println(getFreeMemory());
+  
+   Serial.flush();
   
 }
 
@@ -93,62 +105,64 @@ void loop() {
    if(!stageOne){
      
        stageOne =  rxLoop();
+       Serial.flush();
    }
    
-   //Serial.println(F("Starting Stage Two"));
    if(stageOne && !stageTwo)
    {
-   //Serial.print(F("Starting GPS LOOP"));
-   //Serial.print(F("Free Memory = "));
-   //Serial.println(getFreeMemory());
-  // stageTwo = gpsLoop();
+  
+    stageTwo = gpsLoop();
+    Serial.flush();
    } 
+   
     if((stageOne && stageTwo) == true)
     {
-       //Serial.print(F("Free Memory = "));
-       //Serial.println(getFreeMemory());
-         //Serial.println(F("Starting Stage Three");
          stageThree = obdLoop();
+         Serial.flush();
        
               if(stageThree == true)
               {
                      Serial.print(F("Free Memory = "));
                      Serial.println(getFreeMemory());
                     //Send a complete data string to Breeze via 3G
-                    variable = "GET /test.php?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "\r\n";
-                    //variable = "GET /test.php?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "\r\n";
+                    variable = "GET /echo?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "&co=" + sensor3gas + "\r\n";
+                    //variable = "GET /echo?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&co=" + sensor3gas + "\r\n";
+
                     httpRequest(variable);
                     //reset control flags
                     stageOne = false;
-                    //stageTwo = false;
+                    stageTwo = false;
                     stageThree = false;
                     Serial.flush();
                     delay(5000);             
               }
               else
-              {
-                //Serial.println(F("LOOPING STAGE 3: Gathering OBD2 Data"));                
+              {       
               }
     }
     else
     {
-      //Serial.println(F("LOOPING STAGE 1 & 2: Gathering GPS and TX/RX Data"));
     }
 }
 
-  
+ //TODO COMMENT OUT SERIAL PRINTS
 void httpRequest(String request) {
   int aux;
   int data_size = 0;
-  char url[ ]="54.191.54.53";
-  int port= 80;// or 5004, 5005
+  //char url[ ]="54.191.54.53";
+  //int port= 80;// or 5004, 5005
+  char url[ ]="108.244.165.72";
+  int port= 5004;// or 5004, 5005
+  
 
   char aux_str[50];
-  char data[512];
+  char data[600];
   int x = 0;
   int8_t answer;
   // SETUP the url
   sprintf(aux_str, "AT+CHTTPACT=\"%s\",%d", url, port);
+  
+  Serial.flush();
 
   answer = sendATcommand(aux_str, "+CHTTPACT: REQUEST", 10000);
 
@@ -212,6 +226,7 @@ void httpRequest(String request) {
 
 }
 
+//COMMENT OUT SERIAL CHARS
 int readChars(char *buffer, int length, int timeout){
     int x = 0;
     long lTimeout = timeout;
@@ -249,34 +264,28 @@ int readChars(char *buffer, int length, int timeout){
 }
 
 void power_on(){
-  
-    int onModulePin = 2;
-    pinMode(onModulePin, OUTPUT);
-    int answer=0;
-
-    // checks if the module is started
-    answer = sendATcommand("AT", "OK", 2000);
-       Serial.print(F("power on answer ")); 
  
+   int onModulePin = 2;
+
+    uint8_t answer=0;
+    
+    // checks if the module is started
+    answer = sendATcommand("AT", "OK", 1000);
     if (answer == 0)
     {
         // power on pulse
         digitalWrite(onModulePin,HIGH);
-
         delay(3000);
         digitalWrite(onModulePin,LOW);
-
-
+    
         // waits for an answer from the module
-        while(answer == 0){    
-            // Send AT every two seconds and wait for the answer
-            answer = sendATcommand("AT", "OK", 2000); 
-                Serial.println(F("Power on")); 
-
+        while(answer == 0){     // Send AT every two seconds and wait for the answer
+            answer = sendATcommand("AT", "OK", 1000);    
         }
     }
-  
+    
 }
+
 
 
 int8_t sendATcommand(char* ATcommand, char* expected_answer1,
@@ -294,7 +303,7 @@ int8_t sendATcommand(char* ATcommand, char* expected_answer1,
     while( Serial.available() > 0) Serial.read();    // Clean the input buffer
 
     Serial.println(ATcommand);    // Send the AT command 
-
+    Serial.flush();
 
     x = 0;
     previous = millis();
@@ -333,7 +342,7 @@ int8_t sendATcommand2(char* ATcommand, char* expected_answer1,
     while( Serial.available() > 0) Serial.read();    // Clean the input buffer
 
     Serial.println(ATcommand);    // Send the AT command 
-
+    Serial.flush();
 
     x = 0;
     previous = millis();
@@ -355,6 +364,46 @@ int8_t sendATcommand2(char* ATcommand, char* expected_answer1,
                 answer = 2;
             }
         }
+        // Waits for the asnwer with time out
+    }
+    while((answer == 0) && ((millis() - previous) < timeout));    
+
+    return answer;
+}
+
+
+
+int8_t sendATcommand3(char* ATcommand, char* expected_answer1, unsigned int timeout)
+{
+
+    uint8_t x=0,  answer=0;
+    char response[100];
+    unsigned long previous;
+
+    memset(response, '\0', 100);    // Initialize the string
+
+    delay(100);
+
+    while( Serial.available() > 0) Serial.read();    // Clean the input buffer
+
+    Serial.println(ATcommand);    // Send the AT command 
+      Serial.flush();
+
+        x = 0;
+    previous = millis();
+
+    // this loop waits for the answer
+    do{
+
+        if(Serial.available() != 0){    
+            response[x] = Serial.read();
+            x++;
+            // check if the desired answer is in the response of the module
+            if (strstr(response, expected_answer1) != NULL)    
+            {
+                answer = 1;
+            }
+        }                                                                                                                                                                                                                                                                                                                                
         // Waits for the asnwer with time out
     }
     while((answer == 0) && ((millis() - previous) < timeout));    
@@ -396,7 +445,7 @@ void getResponse(void){
 void gpsStart(){
   
   Serial.println(F("GPS Starting"));
- 
+  Serial.flush();
   // starts GPS session in stand alone mode
    gpsAnswer = sendATcommand("AT+CGPS=1,1","OK",1000);    
    if (gpsAnswer == 0)
@@ -406,10 +455,8 @@ void gpsStart(){
    }
    
    Serial.println(F("GPS Init finished"));
-   //Serial.print(F("Free Memory = "));
-   //Serial.println(getFreeMemory());
+   Serial.flush();
    delay(5000);
-  
 }
 
 void cellStart(){
@@ -427,6 +474,7 @@ void cellStart(){
    sendATcommand("AT+CGSOCKCONT=1,\"IP\",\"m2m.com.attz\"", "OK", 2000);
    
    Serial.println(F("3G Init Finished"));
+   Serial.flush();
 }
 
 void obdStart(){
@@ -436,14 +484,17 @@ void obdStart(){
   delay(1500);
   obd.println("ATZ");
   Serial.println(F("Establishing OBD-II-UART Connection"));
+  Serial.flush();
   delay(2000);
   obd.flush();
   Serial.println(F("CONNECTION For OBD-II-UART Established"));
+  Serial.flush();
 }
 
 void rxTxStart(){
   
   Serial.println(F("RXTX Starting"));
+  Serial.flush();
   
   pinMode(LED_PIN, OUTPUT); 
   pinMode(TX_LEDPIN, OUTPUT); 
@@ -452,6 +503,7 @@ void rxTxStart(){
   man.beginReceiveArray(BUFFER_SIZE,buffer); //listen for message from tx's
   
   Serial.println(F("RXTX Init Finished"));
+    Serial.flush();
 }
 
 boolean rxLoop(){
@@ -474,8 +526,7 @@ boolean rxLoop(){
       
       char motstr[5];
     
-      //if(!(rxFlag1 && rxFlag2 && rxFlag3))
-      if(!(rxFlag1 && rxFlag2))
+      if(!(rxFlag1 && rxFlag2 && rxFlag3))
       {
         //Serial.println(F("Rx Searching..."));
         if(man.receiveComplete())//if there is a message received
@@ -497,6 +548,7 @@ boolean rxLoop(){
             if(id == 1)
             {
               Serial.println(F("Got sensor 1 data"));
+                Serial.flush();
               sensorCache[0] = id;
               sensorCache[1] = temp;
               sensorCache[2] = light;
@@ -510,6 +562,7 @@ boolean rxLoop(){
             if(id == 2)
             {
               Serial.println(F("Got sensor 2 data"));
+                Serial.flush();
               sensorCache[3] = id;
               sensorCache[4] = temp;
               sensorCache[5] = light;
@@ -519,7 +572,7 @@ boolean rxLoop(){
               }
              }
              //Sensor 3 cache
-           /* if(id == 3)
+            if(id == 3)
             {
               Serial.println(F("Got sensor 3 data"));
               sensorCache[6] = id;
@@ -530,7 +583,7 @@ boolean rxLoop(){
               {
                 rxFlag3 = true;
               }
-             }*/
+             }
             /* //Sensor 4 cache
             if(id == 4)
             {
@@ -556,7 +609,9 @@ boolean rxLoop(){
             String string1(idstr); //stores id
             sensor1Id =string1;//Serial.println(sensor1Id);
             String string2(tempstr); //stores the temp
+            //Serial.println(sensor1Temp);
             sensor1Temp = string2;
+            sensor1Temp[2] = '\0';
             //Serial.println(sensor1Temp);
             String string3(lightstr); //stores the light sensed data
             sensor1Light = string3;
@@ -565,7 +620,9 @@ boolean rxLoop(){
             sensor2Id = string4;
             //Serial.println(sensor2Id);
             String string5(tempstr2); //stores temp 2
+            
             sensor2Temp = string5;
+            sensor2Temp[2] = '\0';
             //Serial.println(sensor2Temp);
             String string6(lightstr2); //stores light sensed data 2
             sensor2Light = string6;
@@ -577,17 +634,19 @@ boolean rxLoop(){
            // String string9(motstr); //stores light sensed data 2
           //  sensor4motion = string9;
             Serial.println(F("RX IS FINISHED."));
+              Serial.flush();
             return false;
          }      
       }
       
       //else if(rxFlag1 && rxFlag2 && rxFlag3)
-      else if(rxFlag1 && rxFlag2)
+      else if(rxFlag1 && rxFlag2 && rxFlag3)
       {
          Serial.println(F("ALL RX DATA RECEIVED"));   
+         Serial.flush();
          rxFlag1 = false;
          rxFlag2 = false;
-         //rxFlag3 = false;
+         rxFlag3 = false;
         // rxFlag4 = false;
          //Serial.print(F("Free Memory = "));
          //Serial.println(getFreeMemory());
@@ -692,6 +751,7 @@ boolean gpsLoop(){
               if(gps_data[0] == ',')
               {
                    Serial.println(F("No GPS data currently available"));  
+                     Serial.flush();
                    //return false;
               }
               else
@@ -728,45 +788,10 @@ boolean gpsLoop(){
           }
           else
           {
-              Serial.println(F("Error gathering GPS data...no answer.")); 
+              Serial.println(F("Error gathering GPS data...no answer."));
+               Serial.flush(); 
               return false;
           }
 }
 
-int8_t sendATcommand3(char* ATcommand, char* expected_answer1, unsigned int timeout)
-{
 
-    uint8_t x=0,  answer=0;
-    char response[100];
-    unsigned long previous;
-
-    memset(response, '\0', 100);    // Initialize the string
-
-    delay(100);
-
-    while( Serial.available() > 0) Serial.read();    // Clean the input buffer
-
-    Serial.println(ATcommand);    // Send the AT command 
-
-
-        x = 0;
-    previous = millis();
-
-    // this loop waits for the answer
-    do{
-
-        if(Serial.available() != 0){    
-            response[x] = Serial.read();
-            x++;
-            // check if the desired answer is in the response of the module
-            if (strstr(response, expected_answer1) != NULL)    
-            {
-                answer = 1;
-            }
-        }                                                                                                                                                                                                                                                                                                                                
-        // Waits for the asnwer with time out
-    }
-    while((answer == 0) && ((millis() - previous) < timeout));    
-
-    return answer;
-}
