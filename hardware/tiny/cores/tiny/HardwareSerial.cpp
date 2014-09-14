@@ -80,7 +80,7 @@ inline void store_char(unsigned char c, ring_buffer *rx_buffer)
 }
 
 #if defined(USART_RX_vect)
-  ISR(USART_RX_vect)
+  SIGNAL(USART_RX_vect)
   {
   #if defined(UDR0)
     unsigned char c  =  UDR0;
@@ -91,14 +91,14 @@ inline void store_char(unsigned char c, ring_buffer *rx_buffer)
   #endif
     store_char(c, &rx_buffer);
   }
-#elif defined(USART0_RECV_vect) && defined(UDR0)
-  ISR(USART0_RECV_vect)
+#elif defined(SIG_USART0_RECV) && defined(UDR0)
+  SIGNAL(SIG_USART0_RECV)
   {
     unsigned char c  =  UDR0;
     store_char(c, &rx_buffer);
   }
-#elif defined(UART0_RECV_vect) && defined(UDR0)
-  ISR(UART0_RECV_vect)
+#elif defined(SIG_UART0_RECV) && defined(UDR0)
+  SIGNAL(SIG_UART0_RECV)
   {
     unsigned char c  =  UDR0;
     store_char(c, &rx_buffer);
@@ -106,8 +106,8 @@ inline void store_char(unsigned char c, ring_buffer *rx_buffer)
 //#elif defined(SIG_USART_RECV)
 #elif defined(USART0_RX_vect)
   // fixed by Mark Sproul this is on the 644/644p
-  //ISR(SIG_USART_RECV)
-  ISR(USART0_RX_vect)
+  //SIGNAL(SIG_USART_RECV)
+  SIGNAL(USART0_RX_vect)
   {
   #if defined(UDR0)
     unsigned char c  =  UDR0;
@@ -118,9 +118,9 @@ inline void store_char(unsigned char c, ring_buffer *rx_buffer)
   #endif
     store_char(c, &rx_buffer);
   }
-#elif defined(UART_RECV_vect)
+#elif defined(SIG_UART_RECV)
   // this is for atmega8
-  ISR(UART_RECV_vect)
+  SIGNAL(SIG_UART_RECV)
   {
   #if defined(UDR0)
     unsigned char c  =  UDR0;  //  atmega645
@@ -138,28 +138,34 @@ inline void store_char(unsigned char c, ring_buffer *rx_buffer)
 
 //#if defined(SIG_USART1_RECV)
 #if defined(USART1_RX_vect)
-  //ISR(SIG_USART1_RECV)
-  ISR(USART1_RX_vect)
+  //SIGNAL(SIG_USART1_RECV)
+  SIGNAL(USART1_RX_vect)
   {
     unsigned char c = UDR1;
     store_char(c, &rx_buffer1);
   }
+#elif defined(SIG_USART1_RECV)
+  #error SIG_USART1_RECV
 #endif
 
 #if defined(USART2_RX_vect) && defined(UDR2)
-  ISR(USART2_RX_vect)
+  SIGNAL(USART2_RX_vect)
   {
     unsigned char c = UDR2;
     store_char(c, &rx_buffer2);
   }
+#elif defined(SIG_USART2_RECV)
+  #error SIG_USART2_RECV
 #endif
 
 #if defined(USART3_RX_vect) && defined(UDR3)
-  ISR(USART3_RX_vect)
+  SIGNAL(USART3_RX_vect)
   {
     unsigned char c = UDR3;
     store_char(c, &rx_buffer3);
   }
+#elif defined(SIG_USART3_RECV)
+  #error SIG_USART3_RECV
 #endif
 
 

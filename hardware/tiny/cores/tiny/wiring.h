@@ -43,8 +43,7 @@ extern "C"{
 
 #define INPUT 0x0
 #define OUTPUT 0x1
-#define INPUT_PULLUP 0x2
-  
+
 #define true 0x1
 #define false 0x0
 
@@ -134,6 +133,7 @@ analogReference constants for ATmega168.  These are NOT correct for the ATtiny84
 #define max(a,b) ((a)>(b)?(a):(b))
 #define abs(x) ((x)>0?(x):-(x))
 #define constrain(amt,low,high) ((amt)<(low)?(low):((amt)>(high)?(high):(amt)))
+#define round(x)     ((x)>=0?(long)((x)+0.5):(long)((x)-0.5))
 #define radians(deg) ((deg)*DEG_TO_RAD)
 #define degrees(rad) ((rad)*RAD_TO_DEG)
 #define sq(x) ((x)*(x))
