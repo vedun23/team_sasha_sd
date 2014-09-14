@@ -7,16 +7,14 @@
 #include <Servo.h> 
 #include <MemoryFree.h>
 
-String vin = "JM3LW28A230055355";
-
 /***Global Vars****/
 //Demo control options
-boolean obdON = true;
-boolean gpsON = true;
+boolean obdON = false;
+boolean gpsON = false;
 
 //declare servo
-Servo servo1;
-int pos = 0;    // variable to store the servo position
+//Servo servo1;
+//int pos = 0;    // variable to store the servo position
 
 //These all print to http req
 
@@ -32,23 +30,21 @@ String sensor3gas;
 
 //RX-TX Manchester
 #define BUFFER_SIZE 3
-#define RX_PIN 11
+//#define RX_PIN 11
 #define LED_PIN 13
-#define TX_LEDPIN 14
+//#define TX_LEDPIN 14
 
 //temp reading buffer
 uint8_t buffer[BUFFER_SIZE];
 uint8_t data[BUFFER_SIZE];
 
 //OBD serial port
-SoftwareSerial obd(9,10);
+SoftwareSerial obd(8,9);
 
 //GPS global vars
 int gpsAnswer = 0;
 String latie; //print to http req
 String longie; //print to http req
-
-
 
 //for data timeouts, keeps data from becoming stale
 uint8_t stageOneCounter = 0; //rxtx timeout
@@ -60,25 +56,22 @@ uint8_t sensorCache[4]; // stores cached data between sensor reads
 
 //OBD global vars
 //This is a character buffer that will store the data from the serial port
-char rxData[20];
-char rxIndex=0;
+//char rxData[20];
+//char rxIndex=0;
 
 String vehRpm; //print to http req
 String vehSpeed; //print to http req
 
 
 //Global Flags for logic control
-boolean rxFlag1 = false;
-boolean rxFlag2 = false;
-boolean rxFlag3 = false;
+//boolean rxFlag1 = false;
+//boolean rxFlag2 = false;
+//boolean rxFlag3 = false;
 
 //Initialize control flags
 boolean stageOne = false; //RXTX always runs
 boolean stageTwo = false;
 boolean stageThree = false;
-
-
-
 
 
 /****Setup Code ****/
@@ -91,9 +84,8 @@ void setup() {
     	vehSpeed = "60"; //defaults if obd is off
     }
     
-      if(!gpsON)
+     if(!gpsON)
     {
-    	//TODO declare float array here for these to cycle through on a route
     	latie ="3259.59816"; 
     	longie="09645.15992";
     }
@@ -108,18 +100,18 @@ void setup() {
     }
      
    //Startup Sequence
-   servo1.attach(5);  // attaches the servo on pin 5 to the servo object
-   
+  // servo1.attach(9);  // attaches the servo on pin 5 to the servo object
+   //servo1.write(0);
    cellStart();
    Serial.flush();
    
    if(gpsON){
-      gpsStart();
+          gpsStart();
 	  Serial.flush();
    }
-    
-   rxTxStart();
-   Serial.flush();
+   //REPLACE WITH BT CODE 
+  // rxTxStart();
+  // Serial.flush();
    
    if(obdON){
 	   obdStart();
@@ -140,7 +132,6 @@ void loop() {
    //receive data from rx/tx 434 Mhz and GPS simultaneously
    //Serial.println(F("Starting Stage One"));
    if(!stageOne){
-     
        stageOne =  rxLoop();
        Serial.flush();
    }
@@ -158,15 +149,17 @@ void loop() {
 		if(obdON){
 			 stageThree = obdLoop();
 			 Serial.flush();
-		 }    
+		 }   
+
               if(stageThree == true)
               {
+                             
                      Serial.print(F("Free Memory = "));
                      Serial.println(getFreeMemory());
                     //Send a complete data string to Breeze via 3G
-                    variable = "GET /echo?&vin=" + vin + "&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "&co=" + sensor3gas + "\r\n";
+                    variable = "GET /echo?&vin=JM3LW28A230055355&tmp1=" + sensor1Temp + "&bri1=" + sensor1Light + "&tmp2=" + sensor2Temp + "&bri2=" + sensor2Light  + "&rpm=" + vehRpm + "&spd=" + vehSpeed + "&lat=" + latie + "&lng=" + longie + "&co=" + sensor3gas + "\r\n";
 					
-					//send data to cloud
+		   //send data to cloud
                     httpRequest(variable);
 					
                     //reset control flags
@@ -179,7 +172,6 @@ void loop() {
 						stageThree = false;
 					}
 					
-                    Serial.flush();
                     delay(5000);             
               }
               else
@@ -200,7 +192,7 @@ void httpRequest(String request) {
   
 
   char aux_str[50];
-  char data[600];
+  char data[450];
   int x = 0;
   int8_t answer;
   // SETUP the url
@@ -246,12 +238,13 @@ void httpRequest(String request) {
 
             if (data_size > 0) 
             {
-               int returned = readChars(data, data_size < sizeof(data) ? data_size : sizeof(data), 10000);
+              Serial.println(data);
+              /* int returned = readChars(data, data_size < sizeof(data) ? data_size : sizeof(data), 10000);
                Serial.print(F("Returned: "));
                Serial.print(returned);
                Serial.print(F(" : "));
                String dataset(data);
-			   if(dataset.indexOf('ALARM') != -1)
+			   if(dataset.indexOf("ALARM") != -1)
 			   {
                                Serial.println(F("ALARM RECIEVED"));
                                 //turn servo on alarm
@@ -269,7 +262,7 @@ void httpRequest(String request) {
 			   }
 			   else{
 			           Serial.println(data);
-			   }
+			   }*/
             }
          }
          else {
@@ -434,8 +427,6 @@ int8_t sendATcommand2(char* ATcommand, char* expected_answer1,
     return answer;
 }
 
-
-
 int8_t sendATcommand3(char* ATcommand, char* expected_answer1, unsigned int timeout)
 {
 
@@ -568,6 +559,7 @@ void rxTxStart(){
   Serial.println(F("RXTX Init Finished"));
     Serial.flush();
 }
+ 
 
 boolean rxLoop(){
  
@@ -673,8 +665,8 @@ boolean rxLoop(){
             String string5(gasStr); //stores light sensed data 2
             sensor3gas = string5;
 
-            Serial.println(F("RX IS FINISHED."));
-            Serial.flush();
+            //Serial.println(F("RX IS FINISHED."));
+            //Serial.flush();
             return false;
          }      
       }
@@ -827,5 +819,4 @@ boolean gpsLoop(){
                return false;
           }
 }
-
 
